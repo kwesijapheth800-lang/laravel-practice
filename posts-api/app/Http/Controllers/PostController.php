@@ -3,100 +3,48 @@
 namespace App\Http\Controllers;
 
 use App\Models\Post;
-use Illuminate\Http\Request;
+use App\Http\Requests\StorePostRequest;
+use App\Http\Requests\UpdatePostRequest;
+use App\Http\Resources\PostResource;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PostController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index(Request $request)
+    // Fetches posts with a limit of 10 per page and formats them using the Resource
+    public function index(): AnonymousResourceCollection
     {
-        $posts = $request->user()->posts()->latest()->get();
-
-        return response()->json([
-            'data' => $posts,
-        ]);
+        $posts = Post::latest()->paginate(10);
+        
+        return PostResource::collection($posts);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    // Uses StorePostRequest for automatic validation, then creates the post
+    public function store(StorePostRequest $request): PostResource
     {
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'body'  => 'required|string',
-        ]);
+        $post = Post::create($request->validated());
 
-        // We use $request->user()->id to set user_id — never trust user input for this
-        $post = Post::create([
-            'user_id' => $request->user()->id,
-            'title'   => $request->title,
-            'body'    => $request->body,
-        ]);
-
-        return response()->json([
-            'message' => 'Post created successfully',
-            'data'    => $post,
-        ], 201);
+        return new PostResource($post);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Request $request, Post $post)
+    // Uses Route Model Binding (Post $post) to automatically fetch the post by ID or return a 404
+    public function show(Post $post): PostResource
     {
-        // Authorization check: only the owner can view their post
-        // abort(403) returns a 403 Forbidden response
-        if ($post->user_id !== $request->user()->id) {
-            abort(403, 'You do not own this post.');
-        }
-
-        return response()->json([
-            'data' => $post,
-        ]);
+        return new PostResource($post);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Post $post)
+    // Uses UpdatePostRequest for validation and Route Model Binding for fetching
+    public function update(UpdatePostRequest $request, Post $post): PostResource
     {
-        // Authorization check
-        if ($post->user_id !== $request->user()->id) {
-            abort(403, 'You do not own this post.');
-        }
+        $post->update($request->validated());
 
-        $request->validate([
-            'title' => 'sometimes|string|max:255', // 'sometimes' = only validate if field is present
-            'body'  => 'sometimes|string',
-        ]);
-
-        // update() only changes the fields you pass in
-        $post->update($request->only(['title', 'body']));
-        // only() ensures we don't accidentally update user_id or other fields
-
-        return response()->json([
-            'message' => 'Post updated successfully',
-            'data'    => $post,
-        ]);
+        return new PostResource($post);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Request $request, Post $post)
+    // Deletes the post and returns an empty 204 No Content response
+    public function destroy(Post $post)
     {
-        // Authorization check
-        if ($post->user_id !== $request->user()->id) {
-            abort(403, 'You do not own this post.');
-        }
-
         $post->delete();
 
-        return response()->json([
-            'message' => 'Post deleted successfully',
-        ]);
+        return response()->noContent();
     }
 }
